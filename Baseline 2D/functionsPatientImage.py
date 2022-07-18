@@ -1,17 +1,9 @@
-from pickletools import float8
-import numpy as np
-import matplotlib.pyplot as plt
-import torch
 import os
-from torch.utils.data import Dataset
-from tqdm import tqdm
-from random import *
-
-
-from IOFunctions import *
+from random import randint
+from IOFunctions import readNumpyPatient
 
 # choos random patient, random isocenter
-def choosePatient(pathPatients,filenamesToPatients):
+def choosePatientProjection(pathPatients,filenamesToPatients):
     # choose random patient
     nbrOfPatients = len(filenamesToPatients)
     randomPatient = randint(0,nbrOfPatients-1)
@@ -30,33 +22,32 @@ def choosePatient(pathPatients,filenamesToPatients):
     return patientPath
 
 
-def loadPatientImage(patientPath):
-    #laod the image w
-    imagePatient = readNumpy(patientPath)
+def loadRandomPatientProjection(patientPath, nbrOfPixels):
+    Nproj = patientPath.split('/')[-1].split('_')[-1].split('x')[-1].split('.')[0]
+    nproj = int(Nproj)
+    # random projection of the patient 
+    nproj = randint(0, nproj-1)
 
-    # choose random angle -> there are 72 different angles
-    randomAngle = np.random.randint(imagePatient.shape[0])
-
-    # choose the angle 
-    imagePatient = imagePatient[randomAngle]
+    count = nbrOfPixels**2
+    offset = 4 * nbrOfPixels**2 * nproj
+    imagePatient = readNumpyPatient(patientPath, count, offset)
 
     return imagePatient
     
 
 # choose random patch from the projection of the patient (384^2)
-def choosePatientPatch(imagePatient, patchSize):
+def choosePatientPatch(imagePatient, patchSize, projectionSize):
+    #print("ChoosePatientPatch")
     # sample the coordinates of the upper left corner of the patch 
-    x = randint(0,639)
-    y = randint(0,639)
-    img = imagePatient[y:y+patchSize, x:x+patchSize]
+    x = randint(0,projectionSize-patchSize-1)
+    y = randint(0,projectionSize-patchSize-1)
+    img = imagePatient[:,y:y+patchSize, x:x+patchSize]
 
     return img 
 
-def getPatientPatch(pathPatients, filenameToPatients, patientPath, patchSize):
-    #patientPath = choosePatient(pathPatients, filenameToPatients)
-    patientImage = loadPatientImage(patientPath)
-    patientPatch = choosePatientPatch(patientImage, patchSize)
-    #print("Patient")
+def getPatientPatch(patientPath, patchSize,projectionSize):
+    patientProjection = loadRandomPatientProjection(patientPath, projectionSize)
+    patientPatch = choosePatientPatch(patientProjection, patchSize, projectionSize)
     return patientPatch
 
 

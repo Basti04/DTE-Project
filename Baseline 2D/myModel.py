@@ -1,30 +1,32 @@
-import numpy as np
 import torch
 import torch.nn as nn
 import torchvision.transforms.functional as TF
 
-
-from IOFunctions import *
-from functionsPatientImage import *
-from functionsToolImage import *
-from CombinationPatientTools import *
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 def conv(in_channels, out_channels, kernel=3):
     downsample = []
-    downsample.append(nn.Conv2d(in_channels, out_channels, kernel))
+    downsample.append(nn.Conv2d(in_channels, out_channels, kernel, bias=False, padding='same'))
     downsample.append(nn.BatchNorm2d(out_channels))
-    downsample.append(nn.Dropout2d(0.5))
-    downsample.append(nn.LeakyReLU())
+    downsample.append(nn.ReLU())
     downsample = nn.Sequential(*downsample)
     return downsample
 
-def upwards(in_channels, out_channels, kernel=3):
+def convLast(in_channels, out_channels, kernel):
+    downsample = []
+    downsample.append(nn.Conv2d(in_channels, out_channels, kernel, bias=False, padding='same'))
+    downsample.append(nn.BatchNorm2d(out_channels))
+    downsample.append(nn.ReLU())
+    downsample = nn.Sequential(*downsample)
+    return downsample
+
+
+def upwards(in_channels, out_channels, kernel=2):
     upsample = []
     upsample.append(nn.ConvTranspose2d(in_channels, out_channels, kernel, stride=2))
-    upsample.append(nn.LeakyReLU())
+    upsample.append(nn.ReLU())
     upsample = nn.Sequential(*upsample)
     return upsample
 
@@ -78,7 +80,7 @@ class UNET(nn.Module):
 
         self.u11 = conv(128,64)
         self.u12 = conv(64,64)
-        self.u13 = conv(64,1,(1,1))
+        self.u13 = convLast(64,1,(1,1))
 
         
     
@@ -88,7 +90,7 @@ class UNET(nn.Module):
         d2 = self.d2(d1)
         d3 = self.d3(d2)
         #print("d1",d1.shape)
-       # print("d2",d2.shape)
+        #print("d2",d2.shape)
         #print("d3",d3.shape)
 
         d4 = self.d4(d3)
@@ -123,8 +125,8 @@ class UNET(nn.Module):
         #print("u1",u1.shape)
 
         # concatenation of encoder and decoder path
-        if u1.shape != d11.shape:
-            u1 = TF.resize(u1, size=d11.shape[2:])
+        #if u1.shape != d11.shape:
+        #    u1 = TF.resize(u1, size=d11.shape[2:])
         u1 = torch.cat((d11, u1), dim=1)
         #print("u1",u1.shape)
 
@@ -136,8 +138,8 @@ class UNET(nn.Module):
         #print("u4",u4.shape)
 
         # concatenation of encoder and decoder path
-        if u4.shape != d8.shape:
-            u4 = TF.resize(u4, size=d8.shape[2:])
+        #if u4.shape != d8.shape:
+        #    u4 = TF.resize(u4, size=d8.shape[2:])
         u4 = torch.cat((d8, u4), dim=1)
         #print("u4",u4.shape)
 
@@ -149,8 +151,8 @@ class UNET(nn.Module):
         #print("u7",u7.shape)
 
         # concatenation of encoder and decoder path
-        if u7.shape != d5.shape:
-            u7 = TF.resize(u7, size=d5.shape[2:])
+        #if u7.shape != d5.shape:
+        #    u7 = TF.resize(u7, size=d5.shape[2:])
         u7 = torch.cat((d5, u7), dim=1)
         #print("u7",u7.shape)
 
@@ -162,8 +164,8 @@ class UNET(nn.Module):
         #print("u10",u10.shape)
 
         # concatenation of encoder and decoder path
-        if u10.shape != d2.shape:
-            u10 = TF.resize(u10, size=d2.shape[2:])
+        #if u10.shape != d2.shape:
+        #    u10 = TF.resize(u10, size=d2.shape[2:])
         u10 = torch.cat((d2, u10), dim=1)
         #print("u10",u10.shape)
 
@@ -172,9 +174,10 @@ class UNET(nn.Module):
         #print("u11",u11.shape)
         #print("u12",u12.shape)
         u13 = self.u13(u12)
+
         #print("u13",u13.shape)
-        if u13.shape != img.shape:
-            u13 = TF.resize(u13, size=img.shape[2:])
+        #if u13.shape != img.shape:
+        #    u13 = TF.resize(u13, size=img.shape[2:])
         #print("u13", u13.shape)
         
         return u13
@@ -186,13 +189,5 @@ class UNET(nn.Module):
 #count = sum(p.numel() for p in model.parameters() if p.requires_grad)
 #print("Number of parameters:",count)
 
-# CTImage = getImage()
-# CTImage = torch.from_numpy(CTImage)
-# CTImage = CTImage.view(1,8,384,384)
 
-# model = UNET()
-# model = model.float()
-
-# target = model(CTImage)
-# print(target.shape)
 

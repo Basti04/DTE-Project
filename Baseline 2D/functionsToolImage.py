@@ -1,88 +1,62 @@
-from unittest.mock import patch
-import torch
-import torch.nn.functional as F
-
 import numpy as np
-from random import *
+from random import randint
 from scipy import ndimage
-import os
-from IOFunctions import *
+from IOFunctions import writeNumpy
+from IOFunctions import loadNpz,loadNpzTool
+import scipy
 
 
 
 # load tool scene
 def pathRandomToolScene(pathTools, filenameToTools):
-    # choose random scene index
-    randNbr = randint(0,(len(filenameToTools)-2)/2)
-    nbr = randNbr * 2
-    path_stent = pathTools + '/' + filenameToTools[nbr]
-    path_guidwire = pathTools + '/' + filenameToTools[nbr + 1]
-    return path_stent, path_guidwire
+    #choose random scene 
+    randNbr = randint(0, len(filenameToTools) - 1)
+    splitFilename = filenameToTools[randNbr].split('_')
 
-def loadRandomToolScene(pathStent, pathGuidwire):
+    # if the scene is a stent, then load the corresponding guidewire scene 
+    if (splitFilename[2]== 'stent'):
+        pathStent = pathTools + '/' + filenameToTools[randNbr]
+        splitFilename[2] = 'guidewire'
+        filenameToGuidewire = "_".join(splitFilename)
+        pathGuidewire = pathTools + '/' + filenameToGuidewire
+
+    # if the scene is a guidewire, then load the corresponding stent scene
+    else:
+        pathGuidewire = pathTools + '/' + filenameToTools[randNbr]
+        splitFilename[2] = 'stent'
+        filenameToStent = "_".join(splitFilename)
+        pathStent =  pathTools + '/' + filenameToStent
+
+    return pathStent, pathGuidewire
+
+
+def loadToolScene(pathStent, pathGuidewire):
     #load guidwire and stent
-    stent = loadNpz(pathStent) 
-    guidwire = loadNpz(pathGuidwire)
+    stent = loadNpzTool(pathStent) 
+    guidewire = loadNpzTool(pathGuidewire)
 
     # only using the first projection
-    stentSequenz = stent[0]
-    guidwireSequenz = guidwire[0] 
+    stentSequence = stent[0]
+    guidewireSequence = guidewire[0]
+    #print(guidewireSequence.shape)
 
-    return guidwireSequenz, stentSequenz
-
-
+    return guidewireSequence, stentSequence
+  
 
 # convert intersection lengths to projection values
-def converter(guidwire, stent):
+def intersectionLengthToProjectionValue(guidewire, stent):
     # the intersection length is given in mm
-    #attenuationCoefficient = 0.4
-    attenuationCoefficient = 4
-   
+    # 0.4
+    attenuationCoefficient = 0.65
+    #attenuationCoefficient = 10
     stent = stent * attenuationCoefficient
-    guidwire = guidwire * attenuationCoefficient
-    #print("Converter Done!!")
-    return guidwire, stent
-
-# gaussian 
-def gaussian(x, mu, std):
-    gaus = 1/np.sqrt(2 * np.pi * std**2) * np.exp(-(x-mu)**2/(2 * std**2))
-    return gaus
-
-# gaussian kernel
-def gaussian_kernel(size, std, mu=0):
-    row = np.linspace(-(size//2), size//2, size)
-    #print(row)
-    row_gaus = gaussian(row, mu, std)
-    matrix_gaus = np.outer(row_gaus, row_gaus)
-    #print(matrix_gaus)
-    
-    return matrix_gaus    
-
-def convolutionGaussian(tool, size_kernel):
-    # get kernel
-    tool = torch.from_numpy(tool)
-    conv = torch.zeros((8,1006,1006))
-    
-    for i in range(conv.shape[0]):
-        #std = randint(100,200)
-        std = 2
-        kernel = gaussian_kernel(size_kernel,std)
-        kernel = torch.from_numpy(kernel)
-        kernel = kernel.float()
-        kernel = kernel.view(1,1,size_kernel,size_kernel).repeat(1, 1, 1, 1)
-        tool_ = tool[i]
-        tool_ = tool_.view(1,1,tool_.shape[0],tool_.shape[1])
-        x= F.conv2d(tool_, kernel)
-        conv[i] = x[0][0]
-    
-    conv = conv.detach().numpy()
-    #print("ConvDone")
-    return conv
+    guidewire = guidewire * attenuationCoefficient
+    return guidewire, stent
 
 
 # adding stent and tool projection
-def getToolProjection(guidwire, stent):
-    tool = guidwire + stent
+def combineToolProjections(guidewire, stent):
+    tool = guidewire + stent
     return tool
 
 
@@ -91,13 +65,12 @@ def centerOfMass(tool):
     # add the different time steps of the tools
     t = np.sum(tool, axis=0)
     coord = ndimage.measurements.center_of_mass(t)
-    x,y = int(coord[0]), int(coord[1])
+    y,x = int(coord[0]), int(coord[1])
     return x, y
 
 
 # choose random patch from tool projection (being not too empty)
 def chooseRandomPatchTool(tool, patchSize):
-    #print("Choose Tool Patch!!")
     # determin centor of mass
     x_cm, y_cm = centerOfMass(tool)
 
@@ -113,38 +86,52 @@ def chooseRandomPatchTool(tool, patchSize):
     else:
         y = randint( y_cm - patchSize,  y_cm)
 
-    # make sure that x<= tool.shape[1] - patchSize and y<= tool.shape[2] - patchSize because otherwise you cannot get a patch of the 
-    # having the size patchSize
+    # make sure that x+patchSize_x<= Nx  and y + patchSize_y<= Ny because otherwise you cannot get a patch of the 
+    # the size patchSize
      
-    if(x>=tool.shape[1] - patchSize):
-        print("Warning")
-        x = randint( x_cm - patchSize, tool.shape[1] - patchSize- 1)
-    if(y>=tool.shape[2] - patchSize):
-        print("Warning2")
-        y = randint(y_cm - patchSize, tool.shape[2] - patchSize- 1)
+    if(x>=tool.shape[2] - patchSize):
+        x = randint( x_cm - patchSize, tool.shape[2] - patchSize- 1)
+    if(y>=tool.shape[1] - patchSize):
+        y = randint(y_cm - patchSize, tool.shape[1] - patchSize- 1)
 
     img = tool[0:8, y:y+patchSize, x:x+patchSize]
     return img 
 
+def gaussianFilter(toolPatch):
+    #sample standard deviation
+    std = np.random.uniform(0.4,0.6)
+    filteredToolProjection = scipy.ndimage.gaussian_filter(toolPatch[-1], std)
+    return filteredToolProjection
+    #return toolPatch
+
     
 
 def getToolPatch(pathStent, pathGuidwire, patchSize):
-    guidwire, stent = loadRandomToolScene(pathStent, pathGuidwire)
-    guidwire, stent = converter(guidwire, stent)
-    tool = getToolProjection(guidwire, stent)
-    tool = convolutionGaussian(tool,19)
-    patch = chooseRandomPatchTool(tool, patchSize)
-    #print("Tool")
-    return patch
-
-#pathguidwire = 'C:/DTEProjektpraktikumSebastianHeid/trainingData/tools/ex_0_guidewire_intLength_1024x1024x8x2.npz'
-#pathstent = 'C:/DTEProjektpraktikumSebastianHeid/trainingData/tools/ex_0_stent_intLength_1024x1024x8x2.npz'
+    guidewire, stent = loadToolScene(pathStent, pathGuidwire)
+    guidewire, stent = intersectionLengthToProjectionValue(guidewire, stent)
+    toolProjection = combineToolProjections(guidewire, stent)
+    toolPatch = chooseRandomPatchTool(toolProjection, patchSize)
+    filteredToolPatch = gaussianFilter(toolPatch)
+    return filteredToolPatch, toolPatch
 
 
-#tool = getToolPatch(pathstent, pathguidwire, 384)
-#patch = getToolPatch(pathstent, pathguidwire, 384)
+
+
+
+
+
+
+
+# pathguidewire = 'C:/DTEProjektpraktikumSebastianHeid/trainingData/tools/ex_0_guidewire_intLength_1024x1024x8x2.npz'
+# pathstent = 'C:/DTEProjektpraktikumSebastianHeid/trainingData/tools/ex_0_stent_intLength_1024x1024x8x2.npz'
+# img = getToolPatch(pathstent, pathguidewire, 384)
+
+
+
+#tool = getToolPatch(pathstent, pathguidewire, 384)
+#patch = getToolPatch(pathstent, pathguidewire, 384)
 #stent = loadNpz(pathstent)
-#writeNumpy(stent,'C:/DTEProjektpraktikumSebastianHeid/BeispielNoise/org.raw' )
+#writeNumpy(img,'C:/DTEProjektpraktikumSebastianHeid/BeispielNoise/filteredImg.raw' )
 #patch = convolutionGaussian(stent, 19)
 #patch = patch.detach().numpy()
 #print(patch.shape)
@@ -152,3 +139,6 @@ def getToolPatch(pathStent, pathGuidwire, patchSize):
 #writeNumpy(tool, 'C:/DTEProjektpraktikumSebastianHeid/BeispielNoise/conv.raw')
     
    
+# pathTools = 'C:/DTEProjektpraktikumSebastianHeid/trainingData/tools/'
+# filenameTools = [name for name in os.listdir(pathTools)]
+# pathRandomToolScene(pathTools, filenameTools)

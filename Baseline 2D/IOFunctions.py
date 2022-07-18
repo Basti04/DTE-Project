@@ -53,6 +53,15 @@ def readNumpy(path, dtype=np.float32):
 
     return np.fromfile(path, dtype=dtype, count=-1, sep='').reshape(dims)
 
+def readNumpyPatient(path, count, offset, dtype=np.float32):
+    dims = getDimsOfPath(path)
+    dims[0] = 1
+    
+
+    return np.fromfile(path, dtype=dtype, count=count, offset=offset, sep='').reshape(dims)
+
+
+
 def saveAsNpz(arr, path, keepLength1DimsInSuffix=False, dtype=None):
     if dtype is not None:
         finfo = np.finfo(dtype)
@@ -82,6 +91,26 @@ def loadNpz(path, dtype=np.float32):
             arr.astype(dtype)
 
     return arr
+
+def loadNpzTool(path, dtype=np.float32):
+    try:
+        # Older files have been saved in scipy sparse matrix format
+        arr_sparse = scipy.sparse.load_npz(path)
+        arr = arr_sparse.toarray()
+        arr = arr[0][-1]
+        
+        shape = getDimsOfPath(path)
+        arr = arr.reshape(shape)
+    except ValueError:
+        # New files are saved using np.savez_compressed
+        arr = np.load( path )['a']
+
+    if dtype is not None:
+        if arr.dtype != dtype:
+            arr.astype(dtype)
+
+    return arr
+
 
 def readSlicesOf3DVolume(path, ns_lo, ns_hi, dtype=np.float32):    
     dims = getDimsOfPath(path)
@@ -122,8 +151,8 @@ def test():
     assert np.array_equal( array, array_loadedFromNpz )
 
 def NzpToRaw(ImageName):
-    root = 'C:/DTEProjektpraktikumSebastianHeid/2022-06-07_DTEDatenF�rSebastian/2022-06-01_Ngw1-2_Nst1_coupleAllTogether_Nex10000_Nt8_Nthreads2_da0/Results/'
-    root2 = 'C:/DTEProjektpraktikumSebastianHeid/2022-06-07_DTEDatenF�rSebastian/2022-06-01_Ngw1-2_Nst1_coupleAllTogether_Nex10000_Nt8_Nthreads2_da0/NpzToRawImages/'
+    root = 'C:/DTEProjektpraktikumSebastianHeid/2022-06-07_DTEDatenFürSebastian/2022-06-01_Ngw1-2_Nst1_coupleAllTogether_Nex10000_Nt8_Nthreads2_da0/Results/'
+    root2 = 'C:/DTEProjektpraktikumSebastianHeid/2022-06-07_DTEDatenFürSebastian/2022-06-01_Ngw1-2_Nst1_coupleAllTogether_Nex10000_Nt8_Nthreads2_da0/NpzToRawImages/'
     array_loadedFromNpz = loadNpz(root + ImageName)
     name = ImageName.split('_')
     name = name[0] + '_' + name[1] + '_' + name[2] + '_' + name[3]
@@ -133,17 +162,21 @@ def NzpToRaw(ImageName):
     
 
 if __name__ == '__main__':
-   #NzpToRaw('ex_25_stent_intLength_1024x1024x8x2.npz')
-   # root = './2022-05-31_patientProjsCount/projs/S163z-49_y10_x-60_pPrim_1024x1024x72.raw'
+    NzpToRaw('ex_36_stent_intLength_1024x1024x8x2.npz')
+    #root = './2022-05-31_patientProjsCount/projs/S163z-49_y10_x-60_pPrim_1024x1024x72.raw'
     #array = readNumpy(root)
     #print(array.shape)   
     #root2 =  'C:/DTEProjektpraktikumSebastianHeid/2022-06-07_DTEDatenFÜrSebastian/2022-06-01_Ngw1-2_Nst1_coupleAllTogether_Nex10000_Nt8_Nthreads2_da0/NpzToRawImages/ex_0_guidewire_intLength_1024x1024x8x2.raw'
-    #array2 = readNumpy(root2)
+   # array2 = readNumpy(root2)
     #print(array2.shape)
     #NzpToRaw('ex_2_guidewire_intLength_1024x1024x8x2.npz')
 
-    patient = 'C:/DTEProjektpraktikumSebastianHeid/trainingData/tools/ex_0_guidewire_intLength_1024x1024x8x2.npz'
-    patientImg = loadNpz(patient)
+    # patient = 'C:/DTEProjektpraktikumSebastianHeid/trainingData/patients/S163/z-49_y10_x-60_pPrim_1024x1024x72.raw'
+    # patientImg = readNumpy(patient)
+    # patientImg2 = readNumpyPatient(patient, 1024*1024, 4*1024*1024*1)
+
+    # print(patientImg2)
+    # print(patientImg[1])
  
-    print(patientImg.shape[2])
-    print(patientImg.shape)
+    # print(patientImg.shape)
+    # print(patientImg2.shape)

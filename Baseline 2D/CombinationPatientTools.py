@@ -1,55 +1,47 @@
-from distutils.command.install_scripts import install_scripts
 from multiprocessing.sharedctypes import Value
 import numpy as np
+import scipy
 
-from IOFunctions import *
-from functionsPatientImage import *
-from functionsToolImage import *
+from functionsPatientImage import getPatientPatch
+from functionsToolImage import getToolPatch
+from IOFunctions import writeNumpy
 
 
 def combinePatientToolProjectionAndNoiseSampling(patientPatch, toolPatch):
+    #print("combinePatientToolProjectionAndNoiseSampling")
    # add patient patch and tool patch
-    #print(patientPatch.shape)
-    #print(toolPatch.shape)
-    inputPatch0 = patientPatch + toolPatch
-    #writeNumpy(inputPatch0, 'C:/DTEProjektpraktikumSebastianHeid/BeispielNoise/CTWithout2.raw')
+    inputPatch = patientPatch + toolPatch
+    #writeNumpy(inputPatch, 'C:/DTEProjektpraktikumSebastianHeid/Baseline 2D/test Data 30/inputWithoutNoise_384x384x1.raw')
    
     # convert p-value to photon number by using p = -ln(N/N0)
-    # sample random N0
-    n0 = np.random.uniform(10**7,10**8)
-    inputPatch_N = n0 * np.exp(-inputPatch0)
+    # sample random n0
+    #n0 = np.random.uniform(10**3,5*10**3)
+    ##
+    n0 = np.random.uniform(1.25*10**2,2.5*10**2)
+    ##
+    #n0 = 10**4
+    inputPatch_N = n0 * np.exp(-inputPatch)
 
     # sample noise
-    #inputPatch_N = np.random.poisson(inputPatch_N)
+    std = np.random.uniform(0.3,1)
+    inputPatch_N = inputPatch_N + scipy.ndimage.gaussian_filter((np.random.poisson(inputPatch_N) - inputPatch_N)[-1], std)
     
-    for i in range(0,8):
-        for j in range(0,384):
-            for k in range(0,384):
-                if inputPatch_N[i][j][k] == 0:
-                    value = n0
-                else:
-                    value = np.random.poisson(inputPatch_N[i][j][k])
-                    # make sure that you do not have a zero
-                    while(value <= 0):
-                        value = np.random.poisson(inputPatch_N[i][j][k])
-                inputPatch_N[i][j][k] = value
-
     
-
+    #inputPatch_N = np.maximum(inputPatch_N,1,)
+    inputPatch_N[inputPatch_N <= 0] = 1
 
     # convert back to p-values
     inputPatch = -np.log(inputPatch_N/n0)
+    inputPatch = inputPatch.astype("float32")
 
     return inputPatch
 
 # get your projection of patient and tool
-def getProjection(filenameToPatients, pathPatients, patientPath, pathStent, pathGuidwire, patchSize):
-    print("Get projection")
-    toolPatch = getToolPatch(pathStent, pathGuidwire, patchSize)
-    patientPatch = getPatientPatch(pathPatients, filenameToPatients, patientPath, patchSize)
-    projection = combinePatientToolProjectionAndNoiseSampling(patientPatch, toolPatch)
-    print("Have projection")
-
+def getProjection(patientPath, pathStent, pathGuidwire, patchSize, projectionSize):
+    
+    toolPatchFilterd, toolPatch = getToolPatch(pathStent, pathGuidwire, patchSize)
+    patientPatch = getPatientPatch(patientPath, patchSize, projectionSize)
+    projection = combinePatientToolProjectionAndNoiseSampling(patientPatch, toolPatchFilterd)
 
     return projection, toolPatch
 
